@@ -1,9 +1,9 @@
 hostname: "0.0.0.0"  # Listen on all interfaces by default
-port: 3000
+port: 4000
 
 # Debug configuration (optional)
 debug:
-  level: "info"  # Possible values: "error", "warn", "info", "debug", "verbose"
+  level: "debug"  # Possible values: "error", "warn", "info", "debug", "verbose"
 
 # Authentication configuration (optional)
 # auth:
@@ -24,15 +24,15 @@ servers:
     args:
       - -y
       - "@modelcontextprotocol/server-filesystem"
-      - "/home/aaron"
+      - "/Users/marcosanvido/src/"
 
-  # run a an MCP server from local source
-  puppeteer:
-    command: tsx
-    args:
-      - "/home/aaron/AI/MCP-Servers/src/puppeteer/index.ts"
+  # # run a an MCP server from local source
+  # puppeteer:
+  #   command: tsx
+  #   args:
+  #     - "/Users/marcosanvido/AI/MCP-Servers/src/puppeteer/index.ts"
 
-  youtube:
-    command: tsx
-    args:
-      - "/home/aaron/AI/mcp-server-youtube-transcript/src/index.ts"
+  # youtube:
+  #   command: tsx
+  #   args:
+  #     - "/Users/marcosanvido/AI/mcp-server-youtube-transcript/src/index.ts"

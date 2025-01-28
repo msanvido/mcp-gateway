@@ -8,6 +8,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { stringify } from "yaml";
 import { randomUUID } from "crypto";
+import { json } from "stream/consumers";
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'verbose';
 
@@ -217,6 +218,8 @@ class MCPGateway {
 
           // Store server info
           this.servers.set(sessionId, server);
+          this.logger.debug('Current servers:', [...this.servers.keys()]);
+        
           this.logger.debug(`Server instance created with sessionId: ${sessionId}`);
 
           // Bridge messages from STDIO to SSE
@@ -247,6 +250,9 @@ class MCPGateway {
       if (req.method === "POST") {
         const sessionId = req.url!;
         const server = this.servers.get(sessionId);
+        this.logger.debug(`Handling POST for ${sessionId}`);
+        this.logger.debug('Current servers:', [...this.servers.keys()]);
+        this.logger.debug(server)
         if (!server?.sseTransport) {
           res.writeHead(400).end("No active transport for session " + sessionId);
           return;
@@ -305,20 +311,30 @@ try {
     throw new Error('At least one server must be configured');
   }
 
-  // 1) We'll parse arguments for schemaDump, schemaFormat
+  // 1) We'll parse arguments for schema, format
   const argv = await yargs(hideBin(process.argv))
-    .option('schemaDump', { type: 'boolean', default: false })
-    .option('schemaFormat', { type: 'string', default: 'yaml' })
+    .option('schema', { type: 'boolean', default: false })
+    .option('format', { type: 'string', default: 'yaml' })
     .argv;
-
-  // 2) If schemaDump, gather all tools and dump. Then exit.
-  if (argv.schemaDump) {
-    dumpSchemas(config, argv.schemaFormat === 'json' ? 'json' : 'yaml')
-      .then(() => process.exit(0))
+    console.log(argv);  
+  // 2) If schema gather all tools and dump them on the console. Then exit.
+  if (argv.schema) {
+    console.log("Dumping OpenAPI schema...");  
+    await generateOpenApiSchema(config)
+      .then( openApi => {
+          // Output
+          if (argv.format === "json") {
+            console.log(JSON.stringify(openApi, null, 2));
+          } else {
+            const yamlData = stringify(openApi);
+            console.log(yamlData);
+          }
+        })
       .catch(err => {
         console.error(err);
         process.exit(1);
       });
+      process.exit(0)
   } else {
     // Otherwise, proceed with normal gateway startup
     const gateway = new MCPGateway(config);
@@ -345,6 +361,13 @@ async function handleRestRequest(
     res.end(JSON.stringify({ sessionId }));
     return;
   }
+
+    // Add endpoint for session ID generation
+    if (req.url == "/api/openapi" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(await generateOpenApiSchema(config)));
+      return;
+    }
 
   // Example route: POST /api/<serverName>/<toolName>?sessionId=123
   const urlParts = (req.url || "").split("?")[0].split("/").filter(Boolean); // skip empty
@@ -415,7 +438,7 @@ async function handleRestRequest(
 function sendAndWaitForResponse(stdioTransport: StdioClientTransport, message: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const onMsg = (msg: any) => {
-      // console.log("Got message:", msg);
+      console.log("Got message:", msg);
       if (msg.id === message.id) {
         stdioTransport.onmessage = undefined;
         resolve(msg.result ?? msg.error ?? {});
@@ -424,12 +447,12 @@ function sendAndWaitForResponse(stdioTransport: StdioClientTransport, message: a
     stdioTransport.onmessage = onMsg;
     stdioTransport.onerror = reject;
     stdioTransport.send(message).then(() => { 
-      // console.log("Sent message:", message) 
+      console.log("Sent message:", message) 
     }).catch(reject);
   });
 }
 
-async function dumpSchemas(config: GatewayConfig, format: 'json' | 'yaml') {
+async function generateOpenApiSchema(config: GatewayConfig): Promise<any> {
   const openApi: any = {
     openapi: "3.0.0",
     info: { title: "MCP Gateway Tools", version: "1.0.0" },
@@ -437,7 +460,7 @@ async function dumpSchemas(config: GatewayConfig, format: 'json' | 'yaml') {
   };
 
   for (const [serverName, serverConfig] of Object.entries(config.servers)) {
-    // console.log("Dumping tools for server:", serverName);
+    console.log("Dumping tools for server:", serverName);
 
     // Spin up a temporary session, get tools
     const stdio = new StdioClientTransport({
@@ -474,7 +497,7 @@ async function dumpSchemas(config: GatewayConfig, format: 'json' | 'yaml') {
       params: {}
     });
 
-    // console.log("Got tools:", toolsList);
+    console.log("Got tools:", toolsList);
 
     if (toolsList && Array.isArray(toolsList.tools)) {
       for (const tool of toolsList.tools) {
@@ -543,11 +566,5 @@ async function dumpSchemas(config: GatewayConfig, format: 'json' | 'yaml') {
     }
   };
 
-  // Output
-  if (format === "json") {
-    console.log(JSON.stringify(openApi, null, 2));
-  } else {
-    const yamlData = stringify(openApi);
-    console.log(yamlData);
-  }
+  return openApi;
 }
