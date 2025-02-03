@@ -364,7 +364,7 @@ async function handleRestRequest(
 
     // Add endpoint for session ID generation
     if (req.url == "/api/openapi" && req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(200, { "Content-Type": "application/json"});
       res.end(JSON.stringify(await generateOpenApiSchema(config)));
       return;
     }
